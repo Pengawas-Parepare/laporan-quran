@@ -202,7 +202,7 @@ function schoolById(id){for(var i=0;i<S.schools.length;i++)if(S.schools[i].id===
 function managed(){return S.schools.filter(function(s){return s.kepsekId&&s.kepsekId===S.myId;});}
 function isMgr(){return S.mode!=="shared"?S.canAdmin:(S.canAdmin||managed().length>0);}
 function manages(sid){if(S.canAdmin)return true;var s=schoolById(sid);return !!(s&&s.kepsekId&&s.kepsekId===S.myId);}
-function visSchools(){var a=sortedSchools();if(S.mode==="shared"&&!S.canAdmin&&managed().length)return a.filter(function(s){return manages(s.id);});return a;}
+function visSchools(){var a=sortedSchools();if(S.mode==="shared"&&!S.canAdmin)return a.filter(function(s){return manages(s.id)||s.kelas.some(function(k){return k.guruId&&k.guruId===S.myId;});});return a;}
 function strip(o){var x=Object.assign({},o||{});delete x.id;return x;}
 function regDoc(req,nama){var cur=S.regRaw[S.myId]||{},o={requests:req,nama:nama};if(cur.kepsek)o.kepsek=cur.kepsek;return o;}
 function normSchool(d){
@@ -268,10 +268,13 @@ function renderBanner(){
 }
 function render(){
   renderBanner();
+  var isK=S.mode==="shared"&&!S.canAdmin&&managed().length>0;
+  if(isK&&(S.tab==="input"||S.tab==="daftar"||S.tab==="kepsek"))S.tab="ringkas";
   var tabs=document.querySelectorAll("#tabs button");
   for(var i=0;i<tabs.length;i++){
     var tn=tabs[i].getAttribute("data-tab");
     tabs[i].classList.toggle("on",tn===S.tab);
+    if(tn!=="sekolah"&&tn!=="ringkas")tabs[i].style.display=(isK&&(tn==="input"||tn==="daftar"||tn==="kepsek"))?"none":"";
     if(tn==="sekolah"){
       tabs[i].style.display=!isMgr()?"none":"";
       var np=(S.mode==="shared"&&isMgr()&&S.ready)?pendingList().length+(S.canAdmin?pendingKS().length:0):0;
@@ -301,7 +304,8 @@ function statusChip(st){
 }
 function renderDash(){
   var schools=visSchools();
-  if(S.mode==="shared"&&!S.canAdmin&&managed().length&&schools.length===1&&S.scope==="all")S.scope=schools[0].id;
+  if(S.mode==="shared"&&!S.canAdmin&&schools.length===1&&S.scope==="all")S.scope=schools[0].id;
+  if(!schools.length&&S.mode==="shared"&&!S.canAdmin&&sortedSchools().length){$("view").innerHTML='<div class="card empty form-narrow"><h2>Dashboard belum tersedia</h2><p>Dashboard tampil setelah pendaftaran Anda sebagai guru kelas disetujui.</p></div>';return;}
   if(!schools.length){
     $("view").innerHTML='<div class="card empty"><h2>Belum ada sekolah binaan</h2><p>Sekolah dan daftar kelas ditambahkan oleh admin di tab Kelola Sekolah.</p>'+(S.canAdmin?'<button class="btn primary" data-action="goto-sekolah">Tambah sekolah</button>':'')+'</div>';
     return;
