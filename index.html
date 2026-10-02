@@ -147,7 +147,7 @@ function fbOn(){return !!(window.firebase&&FIREBASE_CONFIG.apiKey&&FIREBASE_CONF
 function showLogin(){
   S.needLogin=true;var tb0=$("tabs");if(tb0)tb0.style.display="none";
   var bn=$("banner");if(bn)bn.innerHTML="";
-  $("view").innerHTML='<div class="card form-narrow"><h2>Masuk</h2><p class="hint" style="margin-top:0">Masuk dengan akun Google Anda untuk melapor, mendaftar sebagai guru kelas, atau mengelola sekolah (admin).</p><button class="btn primary" data-action="login">Masuk dengan Google</button></div>';
+  $("view").innerHTML='<div class="card form-narrow"><h2>Masuk</h2><p class="hint" style="margin-top:0">Masuk dengan akun Google Anda untuk melapor, mendaftar sebagai guru kelas, atau mengelola sekolah (admin).</p><button class="btn primary" data-action="login">Masuk dengan Google</button></div><div class="card form-narrow"><h2>Kepala Sekolah?</h2><p class="hint" style="margin-top:0">Belum terdaftar? Masuk dengan akun Google Anda, lalu langsung ke formulir pendaftaran kepala sekolah.</p><button class="btn" data-action="login-kepsek">Daftar sebagai Kepala Sekolah</button></div>';
 }
 async function fbStart(){
   firebase.initializeApp(FIREBASE_CONFIG);
@@ -801,7 +801,8 @@ document.addEventListener("click",function(ev){
   var tab=t.getAttribute("data-tab");
   if(tab){S.tab=tab;S.confirmDel=null;render();return;}
   var a=t.getAttribute("data-action"),id=t.getAttribute("data-id");
-  if(a==="login"){
+  if(a==="login"||a==="login-kepsek"){
+    if(a==="login-kepsek"){S.tab="kepsek";try{sessionStorage.setItem("lapor-tab","kepsek");}catch(e){}}
     var pr=new firebase.auth.GoogleAuthProvider();
     window.__auth.signInWithPopup(pr).catch(function(e){
       if(e&&(e.code==="auth/popup-blocked"||e.code==="auth/operation-not-supported-in-this-environment"))window.__auth.signInWithRedirect(pr);
@@ -966,7 +967,8 @@ function start(){
     }
     S.mode=db?"shared":"local";
     if(!db)S.canAdmin=true;
-    if(db&&S.canAdmin)S.tab="ringkas";
+    var st0=null;try{st0=sessionStorage.getItem("lapor-tab");sessionStorage.removeItem("lapor-tab");}catch(e){}
+    if(db&&S.canAdmin)S.tab="ringkas";else if(st0)S.tab=st0;
     repo=db?dbRepo(db):localRepo();
     var hR=function(l){var m={};l.forEach(function(d){m[d.id]=d;});S.raw=m;loaded.laporan=true;onData();};
     var hP=function(l){var m={};l.forEach(function(d){m[d.id]=d;});S.regRaw=m;loaded.p=true;onData();};
