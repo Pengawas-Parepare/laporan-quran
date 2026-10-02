@@ -202,7 +202,17 @@ function schoolById(id){for(var i=0;i<S.schools.length;i++)if(S.schools[i].id===
 function managed(){return S.schools.filter(function(s){return s.kepsekId&&s.kepsekId===S.myId;});}
 function isMgr(){return S.mode!=="shared"?S.canAdmin:(S.canAdmin||managed().length>0);}
 function manages(sid){if(S.canAdmin)return true;var s=schoolById(sid);return !!(s&&s.kepsekId&&s.kepsekId===S.myId);}
-function visSchools(){var a=sortedSchools();if(S.mode==="shared"&&!S.canAdmin)return a.filter(function(s){return manages(s.id)||s.kelas.some(function(k){return k.guruId&&k.guruId===S.myId;});});return a;}
+function visSchools(){
+  var a=sortedSchools();
+  if(S.mode!=="shared"||S.canAdmin)return a;
+  var out=[];
+  a.forEach(function(s){
+    if(manages(s.id)){out.push(s);return;}
+    var own=s.kelas.filter(function(k){return k.guruId&&k.guruId===S.myId;});
+    if(own.length)out.push({id:s.id,nama:s.nama,jenjang:s.jenjang,kepsekId:s.kepsekId,kelas:own});
+  });
+  return out;
+}
 function strip(o){var x=Object.assign({},o||{});delete x.id;return x;}
 function regDoc(req,nama){var cur=S.regRaw[S.myId]||{},o={requests:req,nama:nama};if(cur.kepsek)o.kepsek=cur.kepsek;return o;}
 function normSchool(d){
@@ -246,7 +256,11 @@ function localRepo(){
 function dbRepo(db){
   return {
     subscribe:function(c,f){
-      db.collection(c).onSnapshot(function(s){f(s.docs.map(function(d){var o=Object.assign({},d.data());o.id=d.id;return o;}));},
+      return db.collection(c).onSnapshot(function(s){f(s.docs.map(function(d){var o=Object.assign({},d.data());o.id=d.id;return o;}));},
+        function(e){toast("Gagal memuat data ("+(e&&e.code||"error")+")");});
+    },
+    subscribeDoc:function(c,id,f){
+      return db.doc(c+"/"+id).onSnapshot(function(d){var o=null;if(d.exists){o=Object.assign({},d.data());o.id=d.id;}f(o?[o]:[]);},
         function(e){toast("Gagal memuat data ("+(e&&e.code||"error")+")");});
     },
     set:function(c,id,d){return db.doc(c+"/"+id).set(d);},
@@ -269,12 +283,14 @@ function renderBanner(){
 function render(){
   renderBanner();
   var isK=S.mode==="shared"&&!S.canAdmin&&managed().length>0;
+  var isG=S.mode==="shared"&&!S.canAdmin&&!isK&&!!S.myId&&allowed().length>0;
   if(isK&&(S.tab==="input"||S.tab==="daftar"||S.tab==="kepsek"))S.tab="ringkas";
+  if(isG&&(S.tab==="daftar"||S.tab==="kepsek"))S.tab="input";
   var tabs=document.querySelectorAll("#tabs button");
   for(var i=0;i<tabs.length;i++){
     var tn=tabs[i].getAttribute("data-tab");
     tabs[i].classList.toggle("on",tn===S.tab);
-    if(tn!=="sekolah"&&tn!=="ringkas")tabs[i].style.display=(isK&&(tn==="input"||tn==="daftar"||tn==="kepsek"))?"none":"";
+    if(tn!=="sekolah"&&tn!=="ringkas")tabs[i].style.display=((isK&&(tn==="input"||tn==="daftar"||tn==="kepsek"))||(isG&&(tn==="daftar"||tn==="kepsek")))?"none":"";
     if(tn==="sekolah"){
       tabs[i].style.display=!isMgr()?"none":"";
       var np=(S.mode==="shared"&&isMgr()&&S.ready)?pendingList().length+(S.canAdmin?pendingKS().length:0):0;
@@ -873,6 +889,7 @@ document.addEventListener("input",function(ev){
 
 /* ---------- data wiring ---------- */
 function collectIds(){
+  if(S.ownOnly)return S.myId?[S.myId]:[];
   var ids={};
   if(S.myId)ids[S.myId]=1;
   S.schools.forEach(function(sc){sc.kelas.forEach(function(k){if(k.guruId)ids[k.guruId]=1;});});
@@ -882,7 +899,7 @@ function collectIds(){
 }
 async function resolveNames(){
   if(!userNs)return;
-  var need=collectIds().filter(function(id){return !S.names[id];});
+  var need=collectIds().filter(function(id){return !S.names[id]&&!typedName(id);});
   if(!need.length)return;
   try{
     var ps=await userNs.profiles(need);
@@ -947,12 +964,32 @@ function start(){
     if(!db)S.canAdmin=true;
     if(db&&S.canAdmin)S.tab="ringkas";
     repo=db?dbRepo(db):localRepo();
-    repo.subscribe(COL_S,function(l){S.schools=l.map(normSchool);loaded.sekolah=true;onData();});
-    repo.subscribe(COL_R,function(l){var m={};l.forEach(function(d){m[d.id]=d;});S.raw=m;loaded.laporan=true;onData();});
-    if(db){
-      repo.subscribe(COL_P,function(l){var m={};l.forEach(function(d){m[d.id]=d;});S.regRaw=m;loaded.p=true;onData();});
-      repo.subscribe(COL_D,function(l){var m={};l.forEach(function(d){m[d.id]=d;});S.dec=m;loaded.d=true;onData();});
-    }else{loaded.p=true;loaded.d=true;}
+    var hR=function(l){var m={};l.forEach(function(d){m[d.id]=d;});S.raw=m;loaded.laporan=true;onData();};
+    var hP=function(l){var m={};l.forEach(function(d){m[d.id]=d;});S.regRaw=m;loaded.p=true;onData();};
+    var hD=function(l){var m={};l.forEach(function(d){m[d.id]=d;});S.dec=m;loaded.d=true;onData();};
+    var scope=null,unsubs=[];
+    /* admin & kepala sekolah memuat semua data; guru biasa hanya datanya sendiri */
+    function wire(full){
+      var want=full?"full":"own";
+      if(scope===want)return;
+      unsubs.forEach(function(u){if(u)u();});unsubs=[];
+      scope=want;S.ownOnly=!full;
+      loaded.laporan=false;loaded.p=false;loaded.d=false;
+      if(full){
+        unsubs.push(repo.subscribe(COL_R,hR));
+        if(db){unsubs.push(repo.subscribe(COL_P,hP));unsubs.push(repo.subscribe(COL_D,hD));}
+        else{loaded.p=true;loaded.d=true;}
+      }else{
+        unsubs.push(repo.subscribeDoc(COL_R,S.myId,hR));
+        unsubs.push(repo.subscribeDoc(COL_P,S.myId,hP));
+        unsubs.push(repo.subscribeDoc(COL_D,S.myId,hD));
+      }
+    }
+    repo.subscribe(COL_S,function(l){
+      S.schools=l.map(normSchool);loaded.sekolah=true;
+      wire(!db||!S.myId||S.canAdmin||managed().length>0);
+      onData();
+    });
   })();
 }
 start();
