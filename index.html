@@ -114,7 +114,8 @@ svg text{fill:var(--muted);font-size:11px}
   <div id="banner"></div>
   <nav class="tabs" id="tabs">
     <button data-tab="input">Lapor (Guru Kelas)</button>
-    <button data-tab="daftar">Pendaftaran</button>
+    <button data-tab="daftar">Daftar Guru</button>
+    <button data-tab="kepsek">Daftar Kepala Sekolah</button>
     <button data-tab="ringkas">Dashboard</button>
     <button data-tab="sekolah">Kelola Sekolah</button>
   </nav>
@@ -283,6 +284,7 @@ function render(){
   if(S.tab==="ringkas")renderDash();
   else if(S.tab==="input")renderInput();
   else if(S.tab==="daftar")renderDaftar();
+  else if(S.tab==="kepsek")renderKepsekDaftar();
   else if(S.canAdmin||S.mode!=="shared")renderSchools();
   else renderKepsek();
 }
@@ -386,7 +388,7 @@ function renderDaftar(){
   if(!sortedSchools().length)h='<div class="card empty form-narrow"><h2>Belum ada sekolah</h2><p>Admin perlu menambahkan sekolah dan daftar kelas terlebih dahulu.</p></div>';
   else if(S.mode!=="shared")h='<div class="card form-narrow"><h2>Daftar sebagai guru kelas</h2><p class="hint" style="margin:0">Pendaftaran guru hanya berfungsi setelah Firebase dihubungkan, karena butuh akun yang bisa divalidasi admin. Di mode lokal tidak ada akun.</p></div>';
   else if(!S.myId)h='<div class="card empty form-narrow"><h2>Akun Anda belum dikenali</h2><p>Masuk dengan akun Google Anda.</p></div>';
-  else h=regCard(true)+ksCard();
+  else h=regCard(true);
   $("view").innerHTML=h;
 }
 
@@ -522,6 +524,15 @@ function ksCard(){
   }
   var form=(mine.length||st==="menunggu")?"":'<div class="field" style="max-width:320px"><label for="k-school">Sekolah yang Anda pimpin</label><select id="k-school">'+schools.map(function(x){return '<option value="'+esc(x.id)+'">'+esc(x.nama)+'</option>';}).join("")+'</select></div><div class="bar" style="margin:12px 0 0"><button class="btn primary" data-action="ks-submit"'+(S.canWrite?"":" disabled")+'>Ajukan sebagai Kepala Sekolah</button></div>';
   return '<div class="card form-narrow"><h2>Daftar sebagai Kepala Sekolah</h2><div class="hint" style="margin-bottom:8px">Pilih sekolah Anda. Setelah admin menyetujui, Anda bisa menyetujui guru yang mendaftar dan memantau laporan guru tiap bulan.</div>'+info+form+'</div>';
+}
+function renderKepsekDaftar(){
+  var h,c='<div class="card form-narrow"><h2>Daftar sebagai Kepala Sekolah</h2><p class="hint" style="margin:0">';
+  if(S.mode!=="shared")h=c+'Fitur ini butuh Firebase dan akun Google.</p></div>';
+  else if(S.canAdmin)h=c+'Anda masuk sebagai admin, jadi tidak perlu mendaftar. Bagikan alamat situs ke kepala sekolah. Permintaan mereka muncul di tab Kelola Sekolah untuk Anda setujui.</p></div>';
+  else if(!S.myId)h=c+'Akun Anda belum dikenali. Masuk dengan akun Google Anda.</p></div>';
+  else if(!sortedSchools().length)h=c+'Admin perlu menambahkan sekolah terlebih dahulu.</p></div>';
+  else h=ksCard();
+  $("view").innerHTML=h;
 }
 function renderKepsek(){
   var h=pendingCard();
