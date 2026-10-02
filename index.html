@@ -145,6 +145,8 @@ var ADMIN_EMAILS=["buktikerja.makmurnonci@gmail.com"]; /* boleh lebih dari satu;
 /* ---------- Firebase (GitHub Pages) ---------- */
 function fbOn(){return !!(window.firebase&&FIREBASE_CONFIG.apiKey&&FIREBASE_CONFIG.apiKey.indexOf("ISI")!==0);}
 function showLogin(){
+  S.needLogin=true;var tb0=$("tabs");if(tb0)tb0.style.display="none";
+  var bn=$("banner");if(bn)bn.innerHTML="";
   $("view").innerHTML='<div class="card form-narrow"><h2>Masuk</h2><p class="hint" style="margin-top:0">Masuk dengan akun Google Anda untuk melapor, mendaftar sebagai guru kelas, atau mengelola sekolah (admin).</p><button class="btn primary" data-action="login">Masuk dengan Google</button></div>';
 }
 async function fbStart(){
@@ -152,6 +154,7 @@ async function fbStart(){
   var auth=firebase.auth(),fs=firebase.firestore();
   window.__auth=auth;
   var u=await new Promise(function(res){auth.onAuthStateChanged(function(x){if(x)res(x);else showLogin();});});
+  S.needLogin=false;var tb1=$("tabs");if(tb1)tb1.style.display="";
   var email=(u.email||"").toLowerCase();
   var isAdmin=ADMIN_EMAILS.some(function(a){return String(a).toLowerCase()===email;});
   S.email=u.email||"";
@@ -281,6 +284,7 @@ function renderBanner(){
   $("banner").innerHTML=h;
 }
 function render(){
+  if(S.needLogin){showLogin();return;}
   renderBanner();
   var isK=S.mode==="shared"&&!S.canAdmin&&managed().length>0;
   var isG=S.mode==="shared"&&!S.canAdmin&&!isK&&!!S.myId&&allowed().length>0;
